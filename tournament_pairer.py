@@ -13,12 +13,22 @@ class Team():
         return f'{self.name}'
 
 class Judge():
-    def __init__(self, name, school):
+    def __init__(self, name, school, round_limit):
         self.name = name
         self.school = school
+        self.round_limit = int(round_limit)
+        self.done_flag = False
+        self.rounds_judged = 0
 
     def __repr__(self):
         return f'{self.name}'
+
+    def round_check(self):
+        if self.rounds_judged == self.round_limit:
+            self.done_flag = True
+            return True
+        else:
+            return False
 
 def team_list_maker():
     team_csv = open('team_list.csv')
@@ -61,7 +71,8 @@ def judge_list_maker():
     for row in raw_judge_list:
         judge_name = f'{row[0]} {row[1]}'
         judge_school = row[2]
-        entry = Judge(judge_name, judge_school)
+        round_limit = row[4]
+        entry = Judge(judge_name, judge_school, round_limit)
         judge_output.append(entry)
 
     return judge_output
@@ -71,14 +82,15 @@ def judge_list_maker():
 def random_pairing_generator(entry_list, judge_list, room_list, rounds):
     round_count = 0
     final_output = []
-    paired_teams = []
     unpaired_teams = entry_list
+    judging_pool = judge_list
+    depleted_judges = set()
     
     while round_count < (rounds + 1):
         paired_teams = []
         output_list = []
         round_count += 1
-        unassigned_judges = judge_list
+        unassigned_judges = judging_pool
         assigned_judges = []
         pairing_status = False
         round_2 = False
@@ -90,9 +102,11 @@ def random_pairing_generator(entry_list, judge_list, room_list, rounds):
 
         while pairing_status == False:
             try:
-                unpaired_teams = list(set(entry_list) - set(paired_teams))
+                unpaired_teams = list(set(unpaired_teams) - set(paired_teams))
+                unassigned_rooms = list(set(unassigned_rooms) - set(assigned_rooms))
                 if  len(unpaired_teams) == 0:
                     final_output.append(output_list)
+                    unassigned_judges = list(set(unassigned_judges) - set(assigned_judges))
                     pairing_status == True
                     break
                 unassigned_judges = list(set(unassigned_judges) - set(assigned_judges))
@@ -113,19 +127,30 @@ def random_pairing_generator(entry_list, judge_list, room_list, rounds):
 
                     assignable_judges = list(set(unassigned_judges) - (pairing[0].judge_list.union(pairing[1].judge_list)))
                     panel = random.sample(assignable_judges, 3)
-                    output_list.append([pairing[0], pairing[1], panel[0], panel[1], panel[2]])
+                    room = random.choice(unassigned_rooms)
+                    assigned_rooms.append(room)
+                    output_list.append([room, pairing[0], pairing[1], panel[0], panel[1], panel[2]])
                     for judge in panel:
                         assigned_judges.append(judge)
                         pairing[0].judge_list.add(judge)
                         pairing[1].judge_list.add(judge)
+                        judge.rounds_judged += 1
+                        if judge.round_check() == True:
+                            depleted_judges.add(judge)
+                            print(f'Judge: {judge} depleted after {judge.rounds_judged} rounds!\n')
 
             except Exception as err:
                 print(f'Error: {err}\n Paired teams: {paired_teams} \n Unpaired teams: {unpaired_teams}, {len(unpaired_teams)}\n')
 
+
+        judging_pool = list((set(unassigned_judges).union(assigned_judges)) - depleted_judges) 
+
+
+
         assigned_aff = []
         assigned_neg = []
         second_output = []
-        unassigned_judges = judge_list
+        unassigned_judges = judging_pool
         assigned_judges = []
         unassigned_rooms = room_list
         assigned_rooms = []
@@ -134,6 +159,7 @@ def random_pairing_generator(entry_list, judge_list, room_list, rounds):
             unassigned_aff = list(set(unassigned_aff) - set(assigned_aff))
             unassigned_neg = list(set(unassigned_neg) - set(assigned_neg))
             unassigned_judges = list(set(unassigned_judges) - set(assigned_judges))
+            unassigned_rooms = list(set(unassigned_rooms) - set(assigned_rooms))
             if len(unassigned_aff) == 0:
                 final_output.append(second_output)
                 paired_teams = list(set(assigned_aff).union(assigned_neg))
@@ -152,11 +178,18 @@ def random_pairing_generator(entry_list, judge_list, room_list, rounds):
                     assigned_aff.append(aff_choice)
                     assignable_judges = list(set(unassigned_judges) - (aff_choice.judge_list.union(neg_choice.judge_list)))
                     panel = random.sample(assignable_judges, 3)
-                    second_output.append([aff_choice, neg_choice, panel[0], panel[1], panel[2]])
+
+                    room = random.choice(unassigned_rooms)
+                    assigned_rooms.append(room)
+                    second_output.append([room, aff_choice, neg_choice, panel[0], panel[1], panel[2]])
                     for judge in panel:
                         assigned_judges.append(judge)
                         aff_choice.judge_list.add(judge)
                         neg_choice.judge_list.add(judge)
+                        judge.rounds_judged += 1
+                        if judge.round_check() == True:
+                            depleted_judges.add(judge)
+                            print(f'Judge: {judge} depleted after {judge.rounds_judged} rounds!\n')
 
 
             else:
@@ -167,11 +200,18 @@ def random_pairing_generator(entry_list, judge_list, room_list, rounds):
                 assigned_aff.append(aff_choice)
                 assignable_judges = list(set(unassigned_judges) - (aff_choice.judge_list.union(neg_choice.judge_list)))
                 panel = random.sample(assignable_judges, 3)
-                second_output.append([aff_choice, neg_choice, panel[0], panel[1], panel[2]])
+                room = random.choice(unassigned_rooms)
+                second_output.append([room, aff_choice, neg_choice, panel[0], panel[1], panel[2]])
                 for judge in panel:
                     assigned_judges.append(judge)
                     aff_choice.judge_list.add(judge)
                     neg_choice.judge_list.add(judge)
+                    judge.rounds_judged += 1
+                    if judge.round_check() == True:
+                        depleted_judges.add(judge)
+                        print(f'Judge: {judge} depleted after {judge.rounds_judged} rounds!\n')
+
+        judging_pool = list((set(unassigned_judges).union(assigned_judges)) - depleted_judges) 
 
         unpaired_teams = paired_teams
 
@@ -205,12 +245,30 @@ def pairing_writer(list_of_pairings):
         round_num += 1
 
 
+def judge_test(judge_list):
+    run_count = 1
+    while run_count < 9:
+        print(f'Round the {run_count}: \n')
+        for judge in judge_list:
+            judge.round_check()
+            if judge.done_flag == False:
+                judge.rounds_judged += 1
+            else:
+                continue
+
+            print(f'Judge: {judge}  Rounds Judged: {judge.rounds_judged} Round Limit:{judge.round_limit} \n')
+
+        run_count += 1
+
+
+
 
 room_list = room_list_maker()
 test_list = team_list_maker()
 judging_list = judge_list_maker()
 test_output = random_pairing_generator(test_list, judging_list, room_list,3)
 pairing_writer(test_output)
+
 
 
 
